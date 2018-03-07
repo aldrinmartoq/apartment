@@ -122,14 +122,14 @@ module Apartment
       # Clone default schema into new schema named after current tenant
       #
       def clone_pg_schema
-        pg_schema_sql = patch_search_path(pg_dump_schema)
+        pg_schema_sql = patch_schema(pg_dump_schema)
         Apartment.connection.execute(pg_schema_sql)
       end
 
       # Copy data from schema_migrations into new schema
       #
       def copy_schema_migrations
-        pg_migrations_data = patch_search_path(pg_dump_schema_migrations_data)
+        pg_migrations_data = patch_schema(pg_dump_schema_migrations_data)
         Apartment.connection.execute(pg_migrations_data)
       end
 
@@ -171,6 +171,18 @@ module Apartment
         block.call
       ensure
         ENV['PGHOST'], ENV['PGPORT'], ENV['PGUSER'], ENV['PGPASSWORD'] = pghost, pgport, pguser, pgpassword
+      end
+
+      #   Remove the schema part of every object for the new pg_dump schema format
+      #
+      #   @return {String} patched raw SQL dump
+      #
+      def patch_schema(sql)
+        if sql.include? "SET search_path"
+          patch_search_path(sql)
+        else
+          "SET search_path = \"#{current}\", #{default_tenant};\n" + sql.gsub(" #{default_tenant}.", " \"#{current}\".")
+        end
       end
 
       #   Remove "SET search_path ..." line from SQL dump and prepend search_path set to current tenant
